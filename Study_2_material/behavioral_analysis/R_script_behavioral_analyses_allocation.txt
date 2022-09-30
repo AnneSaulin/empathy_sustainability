@@ -1,0 +1,178 @@
+################################################################################
+## analysis of prosocial behavior after different motive strengths #############
+################################################################################
+
+# packages
+library(dplyr)
+library(plyr)
+library(car)
+library(psych)
+library(lme4)
+library(tidyr)
+library(quickpsy)
+library(MASS)
+library(tibble)
+library(emmeans)
+
+##########################################
+### LOAD DATA ############################
+##########################################
+
+decisions_empathy <- read.csv("decisions_empathy.csv", header = TRUE)
+decisions_reciprocity <- read.csv("decisions_reciprocity.csv", header = TRUE)
+
+emotional_reaction_empathy  <- read.csv("emotional_reaction_empathy.csv", header = TRUE)
+emotional_reaction_reciprocity <- read.csv("emotional_reaction_reciprocity.csv", header = TRUE)
+
+betas_trait_z_effects <- read.csv("betas_trait_z_effects.csv", header = TRUE)
+
+################################################################
+### Analysis ###################################################
+################################################################
+
+## fMRI and behavioral replication study 
+
+
+# did emotional reactions during empathy activation and trait empathic concern influence prosocial decisions?
+
+lm_prosoc_emo_trait_empathy <- lm(response ~ scale(emotion_rating)*scale(EC)*condition*as.factor(blockno)*sample, 
+                          emotional_reaction_empathy)
+Anova(lm_prosoc_emo_trait_empathy, type = 3)
+summary(lm_prosoc_emo_trait_empathy)
+
+
+# was empathy-based prosocial behavior influenced by block number or condition?
+lmer_prosoc_empathy <- lmer(response ~ blockno*condition + sample + (1|id), decisions_empathy)
+Anova(lmer_prosoc_empathy, type = 3)
+summary(lmer_prosoc_empathy)
+
+
+# was RT influenced by block number or condition?
+lmer_rt_empathy <- lmer(scale(as.numeric(rt)) ~ as.factor(blockno)*condition + sample + (1|id), 
+                        decisions_empathy)
+Anova(lmer_rt_empathy, type = 3)
+summary(lmer_rt_empathy)
+
+# was empathy-based prosocial behavior influenced by the trial-by-trial point information in 
+# the different blocks and conditions?
+lmer_prosoc_points_empathy <- lmer(response ~ as.factor(blockno)*condition*scale(other_poss_gain)*sample + (1|id), decisions_empathy)
+Anova(lmer_prosoc_points_empathy, type = 3)
+summary(lmer_prosoc_points_empathy)
+
+
+#####
+## psychometric functions 
+
+# psychometric functions for the other's possible gain
+
+# compute one function per condition
+fit_other_gain      <- quickpsy(decisions_empathy, other_poss_gain, response, grouping = .(condition))
+
+# compute one function per subject and condition
+fit_other_gain_subj <- quickpsy(decisions_empathy, other_poss_gain, response, grouping = .(condition, id))
+
+# compute one function per subject and condition and block_no
+fit_other_gain_subj_block <- quickpsy(decisions_empathy, other_poss_gain, response, grouping = .(condition, blockno,id))
+
+lmer_thre_other_gain <- lmer(thre ~ condition + (1|ID), fit_other_gain_subj$thresholds)
+Anova(lmer_thre_other_gain)
+
+
+########################################################################################################
+##### behavioral control study
+
+## were prosocial decisions influenced by trait reciprocity and 
+# emotional reaction duringreciprocity activation?
+
+# together
+lm_prosoc_feel_PR <- lm(rel_freq ~ as.factor(blockno)*condition*scale(mean_feeling_r)*PR, 
+                    emotional_reaction_reciprocity)
+summary(lm_prosoc_feel)
+
+# separetely
+
+lm_prosoc_feel <- lm(rel_freq ~ as.factor(blockno)*condition*scale(mean_feeling_r), 
+                    emotional_reaction_reciprocity)
+summary(lm_prosoc_feel)
+
+lm_prosoc_PR <- lm(rel_freq ~ as.factor(blockno)*condition*scale(PR), 
+                    emotional_reaction_reciprocity)
+summary(lm_prosoc_PR)
+
+##########################
+# prosocial behavior influenced by condition and block number?
+lmer_prosoc_recip <- lmer(response ~ as.factor(blockno)*condition + (1|id), decisions_reciprocity)
+Anova(lmer_prosoc_recip, type = 3)
+summary(lmer_prosoc_recip)
+
+
+# was RT influenced by block number or condition?
+lmer_rt_all_recip <- lmer(scale(as.numeric(rt)) ~ as.factor(blockno)*condition + (1|id), decisions_reciprocity)
+Anova(lmer_rt_all_recip, type = 3)
+summary(lmer_rt_all_recip)
+
+# prosocial decisions influenced by trial-by-trial point information?
+lmer_prosoc_points_recip <- lmer(response ~ as.factor(blockno)*condition*scale(other_poss_gain) + (1|id), decisions_reciprocity)
+Anova(lmer_prosoc_points_recip, type = 3)
+summary(lmer_prosoc_points_recip)
+
+####################################################################################################
+############# psychometric functions ###############################################################
+
+# psychometric functions for the other's possible gain
+
+# compute one function per condition
+fit_other_gain_recip      <- quickpsy(decisions_reciprocity, other_poss_gain, response, grouping = .(condition))
+
+# compute one function per subject and condition
+fit_other_gain_subj_recip <- quickpsy(decisions_reciprocity, other_poss_gain, response, grouping = .(condition, id))
+
+# compute one function per subject and condition and block_no
+fit_other_gain_subj_cond_block_recip <- quickpsy(decisions_reciprocity, other_poss_gain, response, grouping = .(condition, blockno,id))
+
+# compute one function per condition and block_no
+fit_other_gain_cond_block_recip <- quickpsy(decisions_reciprocity, other_poss_gain, response, grouping = .(condition, blockno))
+
+lmer_thre_other_gain_recip <- lmer(thre ~ condition + (1|ID), fit_other_gain_subj_cond_block_recip$thresholds)
+Anova(lmer_thre_other_gain_recip)
+
+
+
+
+#####################################################
+# analyses using imaging data
+
+#### how is neural activation shaped by trait and prosocial decision bias in mpfc and tpj
+## please note: taking negative betas due to contrast definitions in the whole-brain fMRI analyses)
+
+# differential effects of initial vs. sustained z-effect?
+lm_brain_z_init_sust <- lm(betas ~ measurement_value*effect*regions*measurement, 
+      betas_2regions_long[betas_2regions_long$measurement == "z_init" |
+                          betas_2regions_long$measurement== "z_sust" ,])
+summary(lm_brain_z_init_sust)
+
+emtrends(lm_brain_z_init_sust, c("regions", "measurement", "effect"), var = c("measurement_value"))
+
+# effect of general prosocial decision bias?
+lm_brain_z_general <- lm(-betas ~ measurement_value*effect*regions, 
+      betas_trait_z_effects[betas_trait_z_effects$measurement == "z_int" ,])
+summary(lm_brain_z_general)
+emtrends(lm_brain_z_general, c("regions", "effect"), var = c("measurement_value"))
+
+
+###
+#### EC
+lm_brain_z_general_EC <- lm(-betas ~ measurement_value*measurement*effect*regions, 
+      betas_trait_z_effects[betas_trait_z_effects$measurement == "EC" |
+                            betas_trait_z_effects$measurement == "z_int" ,])
+summary(lm_brain_z_general_EC)
+emtrends(lm_brain_z_general_EC, c("regions", "effect", "measurement"), var = c("measurement_value"))
+
+
+#### PT
+lm_brain_z_general_PT <- lm(-betas ~ measurement_value*measurement*effect*regions, 
+      betas_trait_z_effects[betas_trait_z_effects$measurement == "PT" |
+                            betas_trait_z_effects$measurement == "z_int" ,])
+summary(lm_brain_z_general_PT)
+emtrends(lm_brain_z_general_PT, c("regions", "effect", "measurement"), var = c("measurement_value"))
+
